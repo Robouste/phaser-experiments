@@ -1,6 +1,6 @@
 import "phaser";
 import { Keys } from "./keys";
-import { ArcadeSprite, BaseSound, CursorKeys, PhysicsGroup, SpriteWithDynamicBody, StaticGroup } from "./types";
+import { ArcadeSprite, BaseSound, CursorKeys, PhysicsGroup, SpriteWithDynamicBody, StaticGroup, Text } from "./types";
 
 export default class Demo extends Phaser.Scene {
 	private _platforms: StaticGroup;
@@ -8,6 +8,10 @@ export default class Demo extends Phaser.Scene {
 	private _cursors: CursorKeys;
 	private _stars: PhysicsGroup;
 	private _collectSound: BaseSound;
+	private _score: number = 0;
+	private _scoreText: Text;
+	private _bombs: PhysicsGroup;
+	private _gameOver: boolean = false;
 
 	constructor() {
 		super("demo");
@@ -37,10 +41,13 @@ export default class Demo extends Phaser.Scene {
 		this.createPlayer();
 		this.createPlayerAnimations();
 		this.addStars();
+		this.createBombs();
 
 		this.physics.add.collider(this._player, this._platforms);
 		this.physics.add.collider(this._stars, this._platforms);
 		this.physics.add.overlap(this._player, this._stars, this.collectStar, null, this);
+
+		this._scoreText = this.add.text(16, 16, "Score: 0", { fontSize: "32px", color: "#000" });
 	}
 
 	public update(time: number, delta: number): void {
@@ -50,7 +57,7 @@ export default class Demo extends Phaser.Scene {
 	private createPlatforms(): void {
 		this._platforms = this.physics.add.staticGroup();
 
-		this._platforms.create(400, 568, Keys.Images.Ground).setScale(2).refreshBody();
+		(this._platforms.create(400, 568, Keys.Images.Ground) as ArcadeSprite).setScale(2).refreshBody();
 
 		this._platforms.create(600, 400, Keys.Images.Ground);
 		this._platforms.create(50, 250, Keys.Images.Ground);
@@ -118,6 +125,37 @@ export default class Demo extends Phaser.Scene {
 	private collectStar(player: SpriteWithDynamicBody, star: ArcadeSprite): void {
 		star.disableBody(true, true);
 		this._collectSound.play();
+
+		this._score += 10;
+		this._scoreText.setText("Score: " + this._score);
+
+		console.log(this._stars.countActive(true));
+
+		if (this._stars.countActive(true) === 0) {
+			this._stars.children.iterate((child: ArcadeSprite) => child.enableBody(true, child.x, 0, true, true));
+		}
+
+		const x = player.x < 400 ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
+
+		const bomb = this._bombs.create(x, 16, Keys.Images.Bomb) as ArcadeSprite;
+		bomb.setBounce(1);
+		bomb.setCollideWorldBounds(true);
+		bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+	}
+
+	private createBombs(): void {
+		this._bombs = this.physics.add.group();
+		this.physics.add.collider(this._bombs, this._platforms);
+		this.physics.add.collider(this._player, this._bombs, this.hitBomb.bind(this), null);
+	}
+
+	private hitBomb(player: SpriteWithDynamicBody, bomb: ArcadeSprite): void {
+		this.physics.pause();
+
+		this._player.setTint(0xff00000);
+		this._player.anims.play(Keys.Animations.Idle);
+
+		this._gameOver = true;
 	}
 }
 
